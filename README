@@ -1,0 +1,63 @@
+# 📦 Sistema de Gerenciamento de Pedidos
+
+Sistema completo de gerenciamento de pedidos desenvolvido com Java + Spring Boot no backend e HTML/CSS/JS no frontend.
+
+## 🚀 Tecnologias
+
+- **Backend:** Java 21, Spring Boot 4.0.6, Spring Security, JWT
+- **Frontend:** HTML, CSS, JavaScript
+- **Banco de dados:** MySQL
+- **Testes:** JUnit 5, Mockito, JaCoCo
+
+## 🏗️ Arquitetura
+
+O projeto segue Clean Architecture com separação em camadas:
+
+- **domain** — entidades e interfaces de repositório
+- **application** — casos de uso e regras de negócio
+- **infrastructure** — segurança JWT e configurações
+- **presentation** — controllers REST e DTOs
+
+## ⚙️ Como executar
+
+### Pré-requisitos
+- Java 21+
+- Maven 3.9+
+- MySQL 8+
+
+### Configuração
+1. Clone o repositório
+2. Copie o arquivo de exemplo das configurações:
+```bash
+cp src/main/resources/application.properties.example src/main/resources/application.properties
+```
+3. Edite o `application.properties` com suas credenciais do MySQL
+4. Execute o projeto pelo IntelliJ ou via terminal:
+```bash
+./mvnw spring-boot:run
+```
+5. Abra o `frontend/index.html` com Live Server
+
+## 🔐 Perfis de acesso
+
+| Funcionalidade | USER | ADMIN |
+|----------------|------|-------|
+| Login/Cadastro | ✅ | ✅ |
+| Ver produtos | ✅ | ✅ |
+| Criar/Editar/Excluir produtos | ❌ | ✅ |
+| Criar pedidos | ✅ | ✅ |
+| Alterar/Cancelar pedidos | ❌ | ✅ |
+| Ver histórico | ❌ | ✅ |
+
+## 🧪 Testes
+
+```bash
+./mvnw test
+```
+
+## 📊 Cobertura de código
+
+```bash
+./mvnw verify
+```
+O relatório será gerado em `target/site/jacoco/index.html`
