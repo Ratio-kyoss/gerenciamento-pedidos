@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pedidos — Gerenciamento de Pedidos</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div class="navbar">
+        <h1>📦 Gerenciamento de Pedidos</h1>
+        <nav>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="products.html">Produtos</a>
+            <a href="orders.html">Pedidos</a>
+            <button class="btn-logout" onclick="logout()">Sair</button>
+        </nav>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2>➕ Criar Pedido</h2>
+            <div class="alert alert-error"   id="alertError"></div>
+            <div class="alert alert-success" id="alertSuccess"></div>
+
+            <div id="orderItems">
+                <div class="order-item" style="display:flex; gap:10px; margin-bottom:10px;">
+                    <select class="product-select"
+                            style="flex:2; padding:10px; border:1px solid #ddd; border-radius:8px;">
+                        <option value="">Selecione um produto</option>
+                    </select>
+                    <input type="number" class="qty-input" placeholder="Qtd" min="1"
+                           style="flex:1; padding:10px; border:1px solid #ddd; border-radius:8px;">
+                </div>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button class="btn btn-secondary" onclick="addItem()">+ Adicionar Item</button>
+                <button class="btn btn-primary"   onclick="createOrder()">Criar Pedido</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📋 Pedidos</h2>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Usuário</th>
+                            <th>Total</th>
+                            <th>Status</th>
+                            <th>Data</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ordersTable">
+                        <tr><td colspan="6" style="text-align:center">Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/auth.js"></script>
+    <script src="../js/api.js"></script>
+    <script>
+        requireAuth();
+
+        let products = [];
+
+        function showAlert(id, msg) {
+            const el = document.getElementById(id);
+            el.textContent = msg;
+            el.style.display = 'block';
+            setTimeout(() => el.style.display = 'none', 4000);
+        }
+
+        function badgeClass(status) {
+            const map = {
+                PENDING:   'badge-pending',
+                CONFIRMED: 'badge-confirmed',
+                SHIPPED:   'badge-shipped',
+                DELIVERED: 'badge-delivered',
+                CANCELLED: 'badge-cancelled'
+            };
+            return map[status] || '';
+        }
+
+        function statusLabel(status) {
+            const map = {
+                PENDING:   'Pendente',
+                CONFIRMED: 'Confirmado',
+                SHIPPED:   'Enviado',
+                DELIVERED: 'Entregue',
+                CANCELLED: 'Cancelado'
+            };
+            return map[status] || status;
+        }
+
+        async function loadProducts() {
+            const res = await api.getProducts();
+            if (res.ok) {
+                products = res.data;
+                updateAllSelects();
+            }
+        }
+
+        function updateAllSelects() {
+            document.querySelectorAll('.product-select').forEach(sel => {
+                const current = sel.value;
+                sel.innerHTML = '<option value="">Selecione um produto</option>' +
+                    products.map(p =>
+                        `<option value="${p.id}" ${p.id == current ? 'selected' : ''}>
+                            ${p.name} — R$ ${Number(p.price).toFixed(2)} (Estoque: ${p.stock})
+                        </option>`
+                    ).join('');
+            });
+        }
+
+        function addItem() {
+            const div = document.createElement('div');
+            div.className = 'order-item';
+            div.style.cssText = 'display:flex; gap:10px; margin-bottom:10px;';
+            div.innerHTML = `
+                <select class="product-select"
+                        style="flex:2; padding:10px; border:1px solid #ddd; border-radius:8px;">
+                    <option value="">Selecione um produto</option>
+                </select>
+                <input type="number" class="qty-input" placeholder="Qtd" min="1"
+                       style="flex:1; padding:10px; border:1px solid #ddd; border-radius:8px;">
+                <button onclick="this.parentElement.remove()"
+                        style="background:#dc3545; color:#fff; border:none;
+                               border-radius:8px; padding:0 14px; cursor:pointer;">✕</button>
+            `;
+            document.getElementById('orderItems').appendChild(div);
+            updateAllSelects();
+        }
+
+        async function createOrder() {
+            const selects = document.querySelectorAll('.product-select');
+            const qtys    = document.querySelectorAll('.qty-input');
+            const items   = [];
+
+            for (let i = 0; i < selects.length; i++) {
+                const productId = parseInt(selects[i].value);
+                const quantity  = parseInt(qtys[i].value);
+
+                if (!productId || !quantity || quantity < 1) {
+                    showAlert('alertError', 'Selecione o produto e informe a quantidade.');
+                    return;
+                }
+                items.push({ productId, quantity });
+            }
+
+            const res = await api.createOrder({ items });
+
+            if (res.ok) {
+                showAlert('alertSuccess', 'Pedido criado com sucesso!');
+                loadOrders();
+                loadProducts();
+            } else {
+                showAlert('alertError', res.data || 'Erro ao criar pedido.');
+            }
+        }
+
+async function loadOrders() {
+    const res   = await api.getOrders();
+    const tbody = document.getElementById('ordersTable');
+    const isAdmin = getUser()?.role === 'ADMIN';
+
+    if (!res.ok || !Array.isArray(res.data) || !res.data.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center">Nenhum pedido encontrado.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = res.data.map(o => `
+        <tr>
+            <td>${o.id}</td>
+            <td>${o.user?.username || '—'}</td>
+            <td>R$ ${Number(o.totalPrice).toFixed(2)}</td>
+            <td><span class="badge ${badgeClass(o.status)}">${statusLabel(o.status)}</span></td>
+            <td>${new Date(o.createdAt).toLocaleString('pt-BR')}</td>
+            <td>
+                ${isAdmin ? `
+                    <select onchange="changeStatus(${o.id}, this.value)"
+                            style="padding:6px; border-radius:6px; border:1px solid #ddd; margin-right:6px;">
+                        <option value="">Alterar status</option>
+                        <option value="CONFIRMED">Confirmar</option>
+                        <option value="SHIPPED">Enviar</option>
+                        <option value="DELIVERED">Entregar</option>
+                    </select>
+                    <button class="btn btn-danger" onclick="cancelOrder(${o.id})">Cancelar</button>
+                ` : '<span style="color:#888; font-size:0.85rem;">Sem permissão</span>'}
+            </td>
+        </tr>
+    `).join('');
+}
+
+        async function changeStatus(id, status) {
+            if (!status) return;
+            const res = await api.updateOrderStatus(id, status);
+            if (res.ok) {
+                showAlert('alertSuccess', 'Status atualizado!');
+                loadOrders();
+            } else {
+                showAlert('alertError', res.data || 'Erro ao atualizar status.');
+            }
+        }
+
+        async function cancelOrder(id) {
+            if (!confirm('Deseja cancelar este pedido?')) return;
+            const res = await api.cancelOrder(id);
+            if (res.ok) {
+                showAlert('alertSuccess', 'Pedido cancelado!');
+                loadOrders();
+                loadProducts();
+            } else {
+                showAlert('alertError', res.data || 'Erro ao cancelar pedido.');
+            }
+        }
+
+        loadProducts();
+        loadOrders();
+    </script>
+</body>
+</html>

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Produtos — Gerenciamento de Pedidos</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div class="navbar">
+        <h1>📦 Gerenciamento de Pedidos</h1>
+        <nav>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="products.html">Produtos</a>
+            <a href="orders.html">Pedidos</a>
+            <button class="btn-logout" onclick="logout()">Sair</button>
+        </nav>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2>➕ Cadastrar Produto</h2>
+            <div class="alert alert-error"   id="alertError"></div>
+            <div class="alert alert-success" id="alertSuccess"></div>
+
+            <div class="form-group">
+                <label>Nome</label>
+                <input type="text" id="name" placeholder="Nome do produto">
+            </div>
+            <div class="form-group">
+                <label>Descrição</label>
+                <input type="text" id="description" placeholder="Descrição (opcional)">
+            </div>
+            <div class="form-group">
+                <label>Preço (R$)</label>
+                <input type="number" id="price" placeholder="0.00" step="0.01" min="0">
+            </div>
+            <div class="form-group">
+                <label>Estoque</label>
+                <input type="number" id="stock" placeholder="Quantidade em estoque" min="0">
+            </div>
+
+            <button class="btn btn-primary" onclick="saveProduct()">
+                <span id="btnText">Cadastrar Produto</span>
+            </button>
+            <button class="btn btn-secondary" onclick="cancelEdit()"
+                    id="btnCancel" style="display:none; margin-left:10px;">
+                Cancelar
+            </button>
+        </div>
+
+        <div class="card">
+            <h2>📦 Produtos Cadastrados</h2>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Descrição</th>
+                            <th>Preço</th>
+                            <th>Estoque</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productsTable">
+                        <tr><td colspan="6" style="text-align:center">Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/auth.js"></script>
+    <script src="../js/api.js"></script>
+    <script>
+        requireAuth();
+// Esconde formulário de cadastro para USER
+if (getUser()?.role !== 'ADMIN') {
+    document.querySelector('.card').style.display = 'none';
+}
+        let editingId = null;
+
+        function showAlert(id, msg) {
+            const el = document.getElementById(id);
+            el.textContent = msg;
+            el.style.display = 'block';
+            setTimeout(() => el.style.display = 'none', 4000);
+        }
+
+async function loadProducts() {
+    const res = await api.getProducts();
+    const tbody = document.getElementById('productsTable');
+    const isAdmin = getUser()?.role === 'ADMIN';
+
+    if (!res.ok || !res.data.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center">Nenhum produto cadastrado.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = res.data.map(p => `
+        <tr>
+            <td>${p.id}</td>
+            <td>${p.name}</td>
+            <td>${p.description || '—'}</td>
+            <td>R$ ${Number(p.price).toFixed(2)}</td>
+            <td>${p.stock}</td>
+            <td>
+                ${isAdmin ? `
+                    <button class="btn btn-warning" onclick="editProduct(${p.id}, '${p.name}', '${p.description || ''}', ${p.price}, ${p.stock})">Editar</button>
+                    <button class="btn btn-danger"  onclick="deleteProduct(${p.id})">Excluir</button>
+                ` : '<span style="color:#888; font-size:0.85rem;">Sem permissão</span>'}
+            </td>
+        </tr>
+    `).join('');
+}
+
+        async function saveProduct() {
+            const name        = document.getElementById('name').value.trim();
+            const description = document.getElementById('description').value.trim();
+            const price       = parseFloat(document.getElementById('price').value);
+            const stock       = parseInt(document.getElementById('stock').value);
+
+            if (!name || isNaN(price) || isNaN(stock)) {
+                showAlert('alertError', 'Preencha nome, preço e estoque.');
+                return;
+            }
+
+            const data = { name, description, price, stock };
+            const res  = editingId
+                ? await api.updateProduct(editingId, data)
+                : await api.createProduct(data);
+
+            if (res.ok) {
+                showAlert('alertSuccess', editingId ? 'Produto atualizado!' : 'Produto cadastrado!');
+                cancelEdit();
+                loadProducts();
+            } else {
+                showAlert('alertError', res.data || 'Erro ao salvar produto.');
+            }
+        }
+
+        function editProduct(id, name, description, price, stock) {
+            editingId = id;
+            document.getElementById('name').value        = name;
+            document.getElementById('description').value = description;
+            document.getElementById('price').value       = price;
+            document.getElementById('stock').value       = stock;
+            document.getElementById('btnText').textContent   = 'Salvar Alterações';
+            document.getElementById('btnCancel').style.display = 'inline-block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function cancelEdit() {
+            editingId = null;
+            document.getElementById('name').value        = '';
+            document.getElementById('description').value = '';
+            document.getElementById('price').value       = '';
+            document.getElementById('stock').value       = '';
+            document.getElementById('btnText').textContent     = 'Cadastrar Produto';
+            document.getElementById('btnCancel').style.display = 'none';
+        }
+
+        async function deleteProduct(id) {
+            if (!confirm('Deseja excluir este produto?')) return;
+            const res = await api.deleteProduct(id);
+            if (res.ok) {
+                showAlert('alertSuccess', 'Produto excluído!');
+                loadProducts();
+            } else {
+                showAlert('alertError', 'Erro ao excluir produto.');
+            }
+        }
+
+        loadProducts();
+    </script>
+</body>
+</html>

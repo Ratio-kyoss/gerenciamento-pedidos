@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — Gerenciamento de Pedidos</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div class="navbar">
+        <h1>📦 Gerenciamento de Pedidos</h1>
+        <nav>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="products.html">Produtos</a>
+            <a href="orders.html">Pedidos</a>
+            <button class="btn-logout" onclick="logout()">Sair</button>
+        </nav>
+    </div>
+
+    <div class="container">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3 id="totalOrders">—</h3>
+                <p>Total de Pedidos</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="totalProducts">—</h3>
+                <p>Total de Produtos</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="pendingOrders">—</h3>
+                <p>Pedidos Pendentes</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="totalHistory">—</h3>
+                <p>Operações Realizadas</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📋 Histórico de Operações Recentes</h2>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Operação</th>
+                            <th>Entidade</th>
+                            <th>ID</th>
+                            <th>Descrição</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTable">
+                        <tr><td colspan="5" style="text-align:center">Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/auth.js"></script>
+    <script src="../js/api.js"></script>
+    <script>
+       requireAuth();
+
+const user = getUser();
+document.querySelector('.navbar h1').textContent =
+    `📦 Olá, ${user?.username}!`;
+
+async function loadDashboard() {
+    const user = getUser();
+
+    const [orders, products] = await Promise.all([
+        api.getOrders(),
+        api.getProducts()
+    ]);
+
+    if (orders.ok && Array.isArray(orders.data)) {
+        document.getElementById('totalOrders').textContent = orders.data.length;
+        const pending = orders.data.filter(o => o.status === 'PENDING').length;
+        document.getElementById('pendingOrders').textContent = pending;
+    } else {
+        document.getElementById('totalOrders').textContent = '0';
+        document.getElementById('pendingOrders').textContent = '0';
+    }
+
+    if (products.ok && Array.isArray(products.data)) {
+        document.getElementById('totalProducts').textContent = products.data.length;
+    } else {
+        document.getElementById('totalProducts').textContent = '0';
+    }
+
+    // Histórico apenas para ADMIN
+    if (user?.role === 'ADMIN') {
+        const history = await api.getHistory();
+        if (history.ok && Array.isArray(history.data)) {
+            document.getElementById('totalHistory').textContent = history.data.length;
+            renderHistory(history.data.slice(-10).reverse());
+        }
+    } else {
+        document.getElementById('totalHistory').textContent = '—';
+        document.getElementById('historyTable').innerHTML =
+            '<tr><td colspan="5" style="text-align:center">Disponível apenas para administradores.</td></tr>';
+    }
+}
+
+function renderHistory(items) {
+    const tbody = document.getElementById('historyTable');
+    if (!items || !items.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center">Nenhuma operação encontrada.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = items.map(h => `
+        <tr>
+            <td><strong>${h.operation}</strong></td>
+            <td>${h.entity}</td>
+            <td>${h.entityId}</td>
+            <td>${h.description}</td>
+            <td>${new Date(h.createdAt).toLocaleString('pt-BR')}</td>
+        </tr>
+    `).join('');
+}
+
+loadDashboard();
+    </script>
+</body>
+</html>
